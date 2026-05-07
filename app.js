@@ -6,6 +6,41 @@ const state = {
     paymentMethod: null
 };
 
+const API_URL = 'https://q3wjd4olvk.execute-api.us-east-1.amazonaws.com/v1/pay';
+
+async function processPayment(payload, buttonElement) {
+    const originalText = buttonElement ? buttonElement.innerHTML : '';
+    if (buttonElement) {
+        buttonElement.innerHTML = 'Procesando...';
+        buttonElement.disabled = true;
+    }
+    
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (response.ok) {
+            navigate('/success');
+        } else {
+            alert('Error al procesar el pago. Por favor intente de nuevo.');
+            if (buttonElement) {
+                buttonElement.innerHTML = originalText;
+                buttonElement.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('Payment error:', error);
+        alert('Error de conexión.');
+        if (buttonElement) {
+            buttonElement.innerHTML = originalText;
+            buttonElement.disabled = false;
+        }
+    }
+}
+
 // View Generators
 function loginView() {
     return `
@@ -204,8 +239,12 @@ function attachEvents(path) {
                 if (method === 'card') {
                     navigate('/card-form');
                 } else {
-                    // Si es PSE o PayPal, simular pago directo o redirigir
-                    navigate('/success');
+                    // Llamada real a la Lambda para PSE o PayPal
+                    const payload = {
+                        method: method === 'pse' ? 'PSE' : 'PayPal',
+                        amount: 150000 // Monto de ejemplo
+                    };
+                    processPayment(payload, e.currentTarget);
                 }
             });
         });
@@ -229,8 +268,18 @@ function attachEvents(path) {
 
         document.getElementById('cardForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            // Simular envío a Lambda Payment Service -> SQS -> DynamoDB
-            navigate('/success');
+            // Envío real a API Gateway -> Lambda -> DynamoDB
+            const payload = {
+                method: 'Card',
+                amount: 150000,
+                cardDetails: {
+                    number: document.getElementById('cardNumber').value,
+                    expiry: document.getElementById('cardExp').value,
+                    cvc: document.getElementById('cardCvv').value,
+                    name: document.getElementById('cardName').value
+                }
+            };
+            processPayment(payload, e.target.querySelector('button[type="submit"]'));
         });
         document.getElementById('backMethodsBtn').addEventListener('click', () => navigate('/payment-methods'));
     } else if (path === '/success') {
